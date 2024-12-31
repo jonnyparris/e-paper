@@ -19,6 +19,8 @@ SCOPES = ["https://www.googleapis.com/auth/calendar.events.readonly"]
 DIR = os.path.dirname(__file__)
 
 TODOIST_API_KEY = os.getenv("TODOIST_API_KEY")
+TODOIST_PROJECT_ID = os.getenv("TODOIST_PROJECT_ID") if os.getenv("TODOIST_PROJECT_ID") else "2204654002"
+CALENDAR_IDS = os.getenv("CALENDAR_IDS").split(",") if os.getenv("CALENDAR_IDS") else ["primary"]
 
 def get_credentials() -> Credentials:
     creds = None
@@ -39,19 +41,23 @@ def get_credentials() -> Credentials:
 
 def get_upcoming_events(service, max_results: int = 30):
     now = datetime.datetime.utcnow().isoformat() + "Z"  # 'Z' indicates UTC time
-    events_result = (
-        service.events()
-        .list(
-            calendarId="primary",
-            timeMin=now,
-            maxResults=max_results,
-            singleEvents=True,
-            orderBy="startTime",
-        )
-        .execute()
-    )
+    all_events = []
 
-    return events_result.get("items", [])
+    for calendar_id in CALENDAR_IDS:
+        events_result = (
+            service.events()
+            .list(
+                calendarId=calendar_id,
+                timeMin=now,
+                maxResults=max_results,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
+        all_events.extend(events_result.get("items", []))
+
+    return all_events
 
 def get_duvland_tasks():
     if not TODOIST_API_KEY:
@@ -62,8 +68,12 @@ def get_duvland_tasks():
     headers = {
         "Authorization": f"Bearer {TODOIST_API_KEY}"
     }
+    if not TODOIST_PROJECT_ID:
+        print("Missing Todoist Project ID. Please set TODOIST_PROJECT_ID environment variable.")
+        sys.exit(1)
+
     params = {
-        "project_id": "2204654002"
+        "project_id": TODOIST_PROJECT_ID
     }
 
     response = requests.get(url, headers=headers, params=params)
